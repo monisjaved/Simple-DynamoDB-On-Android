@@ -8,6 +8,9 @@
     <eat-comment/>
     <string name="action_settings">Settings</string>
     <string name="app_name">SimpleDynamo</string>
+    <string name="button_gdump">GDump</string>
+    <string name="button_ldump">LDump</string>
+    <string name="button_test">Test</string>
     <!-- From: file:/Users/moonisjaved/Desktop/Masters/Distributed%20Systems/PA4/SimpleDynamo/app/src/main/res/values/styles.xml -->
     <eat-comment/>
     <style name="AppBaseTheme" parent="android:Theme.Light">
