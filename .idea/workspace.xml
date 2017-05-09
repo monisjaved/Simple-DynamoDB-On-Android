@@ -11,33 +11,6 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="a8fe513c-5ae6-40d5-bbc7-2c11f7b966ed" name="Default" comment="">
-      <change type="NEW" beforePath="" afterPath="$PROJECT_DIR$/app/build/intermediates/classes/debug/edu/buffalo/cse/cse486586/simpledynamo/BuildConfig.class" />
-      <change type="NEW" beforePath="" afterPath="$PROJECT_DIR$/app/build/intermediates/classes/debug/edu/buffalo/cse/cse486586/simpledynamo/DBHelper.class" />
-      <change type="NEW" beforePath="" afterPath="$PROJECT_DIR$/app/build/intermediates/classes/debug/edu/buffalo/cse/cse486586/simpledynamo/Message.class" />
-      <change type="NEW" beforePath="" afterPath="$PROJECT_DIR$/app/build/intermediates/classes/debug/edu/buffalo/cse/cse486586/simpledynamo/OnTestClickListener$1.class" />
-      <change type="NEW" beforePath="" afterPath="$PROJECT_DIR$/app/build/intermediates/classes/debug/edu/buffalo/cse/cse486586/simpledynamo/OnTestClickListener$Task.class" />
-      <change type="NEW" beforePath="" afterPath="$PROJECT_DIR$/app/build/intermediates/classes/debug/edu/buffalo/cse/cse486586/simpledynamo/OnTestClickListener.class" />
-      <change type="NEW" beforePath="" afterPath="$PROJECT_DIR$/app/build/intermediates/classes/debug/edu/buffalo/cse/cse486586/simpledynamo/R$attr.class" />
-      <change type="NEW" beforePath="" afterPath="$PROJECT_DIR$/app/build/intermediates/classes/debug/edu/buffalo/cse/cse486586/simpledynamo/R$dimen.class" />
-      <change type="NEW" beforePath="" afterPath="$PROJECT_DIR$/app/build/intermediates/classes/debug/edu/buffalo/cse/cse486586/simpledynamo/R$drawable.class" />
-      <change type="NEW" beforePath="" afterPath="$PROJECT_DIR$/app/build/intermediates/classes/debug/edu/buffalo/cse/cse486586/simpledynamo/R$id.class" />
-      <change type="NEW" beforePath="" afterPath="$PROJECT_DIR$/app/build/intermediates/classes/debug/edu/buffalo/cse/cse486586/simpledynamo/R$layout.class" />
-      <change type="NEW" beforePath="" afterPath="$PROJECT_DIR$/app/build/intermediates/classes/debug/edu/buffalo/cse/cse486586/simpledynamo/R$menu.class" />
-      <change type="NEW" beforePath="" afterPath="$PROJECT_DIR$/app/build/intermediates/classes/debug/edu/buffalo/cse/cse486586/simpledynamo/R$string.class" />
-      <change type="NEW" beforePath="" afterPath="$PROJECT_DIR$/app/build/intermediates/classes/debug/edu/buffalo/cse/cse486586/simpledynamo/R$style.class" />
-      <change type="NEW" beforePath="" afterPath="$PROJECT_DIR$/app/build/intermediates/classes/debug/edu/buffalo/cse/cse486586/simpledynamo/R.class" />
-      <change type="NEW" beforePath="" afterPath="$PROJECT_DIR$/app/build/intermediates/classes/debug/edu/buffalo/cse/cse486586/simpledynamo/SimpleDynamoActivity$1.class" />
-      <change type="NEW" beforePath="" afterPath="$PROJECT_DIR$/app/build/intermediates/classes/debug/edu/buffalo/cse/cse486586/simpledynamo/SimpleDynamoActivity$2.class" />
-      <change type="NEW" beforePath="" afterPath="$PROJECT_DIR$/app/build/intermediates/classes/debug/edu/buffalo/cse/cse486586/simpledynamo/SimpleDynamoActivity.class" />
-      <change type="NEW" beforePath="" afterPath="$PROJECT_DIR$/app/build/intermediates/classes/debug/edu/buffalo/cse/cse486586/simpledynamo/SimpleDynamoProvider$1.class" />
-      <change type="NEW" beforePath="" afterPath="$PROJECT_DIR$/app/build/intermediates/classes/debug/edu/buffalo/cse/cse486586/simpledynamo/SimpleDynamoProvider$ClientTask.class" />
-      <change type="NEW" beforePath="" afterPath="$PROJECT_DIR$/app/build/intermediates/classes/debug/edu/buffalo/cse/cse486586/simpledynamo/SimpleDynamoProvider$RecoveryTask.class" />
-      <change type="NEW" beforePath="" afterPath="$PROJECT_DIR$/app/build/intermediates/classes/debug/edu/buffalo/cse/cse486586/simpledynamo/SimpleDynamoProvider$ServerTask.class" />
-      <change type="NEW" beforePath="" afterPath="$PROJECT_DIR$/app/build/intermediates/classes/debug/edu/buffalo/cse/cse486586/simpledynamo/SimpleDynamoProvider.class" />
-      <change type="NEW" beforePath="" afterPath="$PROJECT_DIR$/app/build/intermediates/dex/debug/classes.dex" />
-      <change type="NEW" beforePath="" afterPath="$PROJECT_DIR$/app/build/outputs/apk/app-debug-unaligned.apk" />
-      <change type="NEW" beforePath="" afterPath="$PROJECT_DIR$/app/build/outputs/apk/app-debug.apk" />
-      <change type="NEW" beforePath="" afterPath="$PROJECT_DIR$/app/build/intermediates/tmp/dex/debug/inputList.txt" />
       <change type="MODIFICATION" beforePath="$PROJECT_DIR$/.idea/workspace.xml" afterPath="$PROJECT_DIR$/.idea/workspace.xml" />
     </list>
     <ignored path="SimpleDynamo.iws" />
@@ -1765,7 +1738,14 @@
       <option name="project" value="LOCAL" />
       <updated>1494344360784</updated>
     </task>
-    <option name="localTasksCounter" value="5" />
+    <task id="LOCAL-00005" summary="Implemented Failure Handling till Phase 5">
+      <created>1494344427954</created>
+      <option name="number" value="00005" />
+      <option name="presentableId" value="LOCAL-00005" />
+      <option name="project" value="LOCAL" />
+      <updated>1494344427954</updated>
+    </task>
+    <option name="localTasksCounter" value="6" />
     <servers />
   </component>
   <component name="TodoView">
@@ -1797,8 +1777,8 @@
       <window_info id="Image Layers" active="false" anchor="left" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.33" sideWeight="0.5" order="3" side_tool="false" content_ui="tabs" />
       <window_info id="Capture Analysis" active="false" anchor="right" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.33" sideWeight="0.5" order="3" side_tool="false" content_ui="tabs" />
       <window_info id="Run" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.3287841" sideWeight="0.5" order="2" side_tool="false" content_ui="tabs" />
-      <window_info id="Version Control" active="true" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="true" show_stripe_button="true" weight="0.3287841" sideWeight="0.5" order="7" side_tool="false" content_ui="tabs" />
-      <window_info id="Terminal" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.3287841" sideWeight="0.5" order="7" side_tool="false" content_ui="tabs" />
+      <window_info id="Version Control" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.3287841" sideWeight="0.5" order="7" side_tool="false" content_ui="tabs" />
+      <window_info id="Terminal" active="true" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="true" show_stripe_button="true" weight="0.3287841" sideWeight="0.5" order="7" side_tool="false" content_ui="tabs" />
       <window_info id="Captures" active="false" anchor="left" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.25" sideWeight="0.5" order="2" side_tool="false" content_ui="tabs" />
       <window_info id="Gradle Console" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.33" sideWeight="0.5" order="7" side_tool="true" content_ui="tabs" />
       <window_info id="Project" active="false" anchor="left" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="true" show_stripe_button="true" weight="0.24964234" sideWeight="0.5" order="0" side_tool="false" content_ui="combo" />
