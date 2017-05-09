@@ -53,16 +53,23 @@ public class SimpleDynamoProvider extends ContentProvider {
     private static final List<String> hashOrders = Arrays.asList("177ccecaec32c54b82d5aaafc18a2dadb753e3b1",
             "208f7f72b198dadd244e61801abe1ec3a4857bc9","33d6357cfaaf0f72991b0ecd8c56da066613c089",
             "abf0fd8db03e5ecb199a9b82929e9db79b909643","c25ddd596aa7c81fa12378fa725f706d54325d12");
-//    private static final ArrayList<String> predMissedMessages = new ArrayList<String>();
-    private static final List<String> predMissedMessages = Arrays.asList("1213213","123123123","2131231231");
+    private static ArrayList<String> allMessages = new ArrayList<String>();
 	private DBHelper dBHelper;
     private static SQLiteDatabase sqLiteDatabase = null;
+    private static boolean isRecovering = false;
 
 
 	@Override
 	public int delete(Uri uri, String selection, String[] selectionArgs) {
 		// TODO delete
         String keyHash = null;
+        while (isRecovering){
+            try {
+                Thread.sleep(50);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+        }
         if(selection.equals("*")){
             Message msg = new Message(myPort,selection,"");
             msg.setMessageType("DELETE");
@@ -86,10 +93,21 @@ public class SimpleDynamoProvider extends ContentProvider {
         try {
             keyHash = genHash(selection);
             String storePort = getStorePort(keyHash);
-            Message message = new Message(storePort, selection, "");
-            message.setSenderPort(myPort);
-            message.setMessageType("DELETE");
-            String resp = new ClientTask().execute(message.getJSON(), storePort).get();
+            String resp = "crashed";
+            int storeIndex = portOrders.indexOf(storePort);
+            int count = 0;
+            while(resp.equals("crashed") && count < 3){
+                Message message = new Message(storePort, selection, "");
+                message.setSenderPort(myPort);
+                message.setMessageType("DELETE");
+                resp = new ClientTask().execute(message.getJSON(), portOrders.get(storeIndex)).get();
+                storeIndex++;
+                if(storeIndex == portOrders.size()){
+                    storeIndex = 0;
+                }
+                count++;
+            }
+
         } catch (NoSuchAlgorithmException e) {
             e.printStackTrace();
         } catch (InterruptedException e) {
@@ -136,18 +154,36 @@ public class SimpleDynamoProvider extends ContentProvider {
 	public Uri insert(Uri uri, ContentValues values) {
 		// TODO insert
         String keyHash = null;
+        while (isRecovering){
+            try {
+                Thread.sleep(50);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+        }
         Log.e("INSRT", "called");
         if (values.containsKey(KEY_FIELD) && values.containsKey(VALUE_FIELD)) {
             Log.e("INSERT", values.getAsString(KEY_FIELD) +  " " + values.getAsString(VALUE_FIELD));
 
             try {
                 keyHash = genHash(values.getAsString(KEY_FIELD));
+                String resp = "crashed";
                 String storePort = getStorePort(keyHash);
-                Message message = new Message(storePort, values.getAsString(KEY_FIELD), values.getAsString(VALUE_FIELD));
-                message.setSenderPort(myPort);
-                int storedCount = 0;
-                message.setMessageType("STORE 0");
-                String resp = new ClientTask().execute(message.getJSON(), storePort).get();
+                int storeIndex = portOrders.indexOf(storePort);
+                int count = 0;
+                while(resp.equals("crashed") && count < 3){
+                    Message message = new Message(storePort, values.getAsString(KEY_FIELD), values.getAsString(VALUE_FIELD));
+                    message.setSenderPort(myPort);
+                    message.setMessageType("STORE");
+                    resp = new ClientTask().execute(message.getJSON(), portOrders.get(storeIndex)).get();
+                    storeIndex++;
+                    if(storeIndex == portOrders.size()){
+                        storeIndex = 0;
+                    }
+                    count++;
+                }
+
+
             } catch (NoSuchAlgorithmException e) {
                 e.printStackTrace();
             } catch (InterruptedException e) {
@@ -195,7 +231,7 @@ public class SimpleDynamoProvider extends ContentProvider {
 		// TODO onCreate
 		dBHelper = new DBHelper(getContext());
         sqLiteDatabase = dBHelper.getWritableDatabase();
-
+        allMessages = new ArrayList<String>();
 
 		TelephonyManager tel = (TelephonyManager)getContext().getSystemService(Context.TELEPHONY_SERVICE);
 		String portStr = tel.getLine1Number().substring(tel.getLine1Number().length() - 4);
@@ -211,22 +247,16 @@ public class SimpleDynamoProvider extends ContentProvider {
             Log.e(TAG, predPort + " " + myPort + " " + succPort);
             Log.e(TAG, serverPortHash);
 
-            Message recover = new Message(myPort, "", "");
-            recover.setMessageType("RECOVER");
-            resp = new ClientTask().execute(recover.getJSON(),succPort).get();
-            Log.e("RECOVER", "resp = " + resp);
+            new RecoveryTask().executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
 
             ServerSocket socket = new ServerSocket(SERVER_PORT);
 			socket.setReuseAddress(true);
+//            socket.setSoTimeout(2000);
 
             new ServerTask().executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR, socket);
 		}catch (IOException e){
 			e.printStackTrace();
-		} catch (InterruptedException e) {
-            e.printStackTrace();
-        } catch (ExecutionException e) {
-            e.printStackTrace();
-        } catch (NoSuchAlgorithmException e) {
+		} catch (NoSuchAlgorithmException e) {
             e.printStackTrace();
         }
 
@@ -238,6 +268,13 @@ public class SimpleDynamoProvider extends ContentProvider {
 	public Cursor query(Uri uri, String[] projection, String selection,
 			String[] selectionArgs, String sortOrder) {
 		// TODO query
+        while (isRecovering){
+            try {
+                Thread.sleep(50);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+        }
         String[] columnNames = {KEY_FIELD, VALUE_FIELD};
         MatrixCursor matrixCursor = new MatrixCursor(columnNames);
         HashMap<String, String> msgMap = new HashMap<String, String>();
@@ -279,22 +316,31 @@ public class SimpleDynamoProvider extends ContentProvider {
             String keyHash = "";
             try{
                 keyHash = genHash(selection);
+                String storePort = getStorePort(keyHash);
+                int storeIndex = (portOrders.indexOf(storePort) + 2) % 5;
+                resp = "crashed";
+                int count = 0;
+                while(resp.equals("crashed") && count < 3){
+                    Message message = new Message(storePort,selection,"");
+                    message.setMessageType("QUERY");
+                    message.setSenderPort(myPort);
+                    Log.e("QUERYING", portOrders.get(storeIndex));
+                    resp = new ClientTask().execute(message.getJSON(), portOrders.get(storeIndex)).get();
+                    storeIndex--;
+                    if(storeIndex == -1){
+                        storeIndex = portOrders.size()-1;
+                    }
+                    count++;
+                }
             }
             catch (NoSuchAlgorithmException e){
                 e.printStackTrace();
             }
-            String storePort = getStorePort(keyHash);
-            Message message = new Message(storePort,selection,"");
-            message.setMessageType("QUERY");
-            message.setSenderPort(myPort);
-            try {
-                resp = new ClientTask().execute(message.getJSON(), storePort).get();
-            } catch (InterruptedException e) {
+            catch (InterruptedException e) {
                 e.printStackTrace();
             } catch (ExecutionException e) {
                 e.printStackTrace();
             }
-
         }
         if( cursor != null && cursor.getColumnCount() == 2){
             if(cursor.moveToFirst()){
@@ -327,23 +373,17 @@ public class SimpleDynamoProvider extends ContentProvider {
                 Log.e("ALL", result);
                 HashMap<String, String> resultMap = getMap(result);
                 for(String key : resultMap.keySet()){
-                    Object[] columnValues = {key, resultMap.get(key)};
-                    matrixCursor.addRow(columnValues);
+                    if(resultMap.get(key) != null){
+                        Object[] columnValues = {key, resultMap.get(key)};
+                        matrixCursor.addRow(columnValues);
+                    }
                 }
             }
 
         }
         //if cursor got some rows then return
-        if(matrixCursor.getCount() > 0){
-            return matrixCursor;
-        }
-
-		return null;
+        return matrixCursor;
 	}
-
-    public synchronized String getMissedMessages(){
-        return TextUtils.join(",,,,",predMissedMessages);
-    }
 
     public synchronized Cursor query(Message message){
         // TODO actual query
@@ -410,6 +450,57 @@ public class SimpleDynamoProvider extends ContentProvider {
         return formatter.toString();
     }
 
+    private class RecoveryTask extends AsyncTask<Void, Void, Void> {
+        @Override
+        // TODO recoveryTask
+        protected Void doInBackground(Void... voids) {
+            isRecovering = true;
+            Log.e("RECOVERY","entered");
+            Socket socket = null;
+            String receivedMessage = null;
+            Message message = new Message(myPort,"","");
+            message.setSenderPort(myPort);
+            message.setMessageType("RECOVER");
+            OutputStream sendStream;
+            DataOutputStream sendData;
+            DataInputStream recvData;
+            try {
+                socket = new Socket(InetAddress.getByAddress(new byte[]{10, 0, 2, 2}),
+                        Integer.parseInt(predPort));
+                socket.setSoTimeout(2000);
+                sendStream = socket.getOutputStream();
+                sendData = new DataOutputStream(sendStream);
+                sendData.writeUTF(message.getJSON());
+                sendData.flush();
+                recvData = new DataInputStream(socket.getInputStream());
+                receivedMessage = recvData.readUTF();
+                processMessages(receivedMessage);
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+            try {
+                Log.e("RECOVERY", "done pred " + isRecovering);
+                socket = new Socket(InetAddress.getByAddress(new byte[]{10, 0, 2, 2}),
+                        Integer.parseInt(succPort));
+                socket.setSoTimeout(2000);
+                sendStream = socket.getOutputStream();
+                sendData = new DataOutputStream(sendStream);
+                sendData.writeUTF(message.getJSON());
+                sendData.flush();
+                recvData = new DataInputStream(socket.getInputStream());
+                receivedMessage = recvData.readUTF();
+                processMessages(receivedMessage);
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+            Log.e("RECOVERY", "done succ " + isRecovering);
+            isRecovering = false;
+            Log.e("RECOVERY","exiting " + isRecovering);
+            return null;
+        }
+
+    }
+
     private class ClientTask extends AsyncTask<String, Void, String> {
         @Override
         // TODO client
@@ -422,6 +513,7 @@ public class SimpleDynamoProvider extends ContentProvider {
             try {
                 socket = new Socket(InetAddress.getByAddress(new byte[]{10, 0, 2, 2}),
                         Integer.parseInt(remotePort));
+                socket.setSoTimeout(2000);
                 OutputStream sendStream = socket.getOutputStream();
                 DataOutputStream sendData = new DataOutputStream(sendStream);
                 sendData.writeUTF(message);
@@ -430,7 +522,7 @@ public class SimpleDynamoProvider extends ContentProvider {
                 receivedMessage = recvData.readUTF();
             } catch (IOException e) {
                 //e.printStackTrace();
-                return "";
+                return "crashed";
             }
             return receivedMessage;
         }
@@ -464,203 +556,122 @@ public class SimpleDynamoProvider extends ContentProvider {
                     String storePort = msg.getStorePort();
                     String senderPort = msg.getSenderPort();
                     String type = msg.getMessageType();
-                    int distance = getDistance(storePort, myPort);
+                    int distance = getDistance(myPort, storePort);
+                    int index = portOrders.indexOf(myPort);
                     Log.e("SOCKET", msg.getJSON());
 
+                    while(isRecovering){
+                        Thread.sleep(50);
+                    }
+
                     if(type.equals("RECOVER")){
+                        isRecovering = true;
                         sendData.writeUTF(getMissedMessages());
+                        isRecovering = false;
                     }
 
                     if(type.contains("STORE")){
-                        Log.e("insert", type);
-                        String[] res = type.split(" ");
-                        int count = Integer.valueOf(res[1]);
-//                        int count = 0;
-                        if(count != getDistance(myPort,storePort)){
-                            predMissedMessages.add(msg.getJSON());
-                            count = getDistance(myPort, storePort);
-                            msg.setStorePort(myPort);
-                        }
-                        int index = portOrders.indexOf(myPort);
-                        if(storePort.equals(myPort)){
-                            while (count != 3){
-                                if(portOrders.get(index).equals(myPort)){
-                                    insert(msg);
-                                    count++;
-                                    index++;
-                                    if(index == portOrders.size())
-                                        index = 0;
-                                }
-                                else{
-                                    if(getDistance(portOrders.get(index),storePort) < 3){
-                                        msg.setMessageType("STORE " + count);
-                                        socket = new Socket(InetAddress.getByAddress(new byte[]{10, 0, 2, 2}),
-                                                Integer.parseInt(portOrders.get(index)));
-                                        OutputStream sendStream = socket.getOutputStream();
-                                        DataOutputStream sendSuccData = new DataOutputStream(sendStream);
-                                        sendSuccData.writeUTF(msg.getJSON());
-                                        DataInputStream getSuccData = new DataInputStream(socket.getInputStream());
+                        if(distance < 3){
+                            addMessage(msg);
+                            insert(msg);
+                            int tempIndex = (index + 1) % 5;
+                            if(distance < 2){
+                                while(true){
+                                    if(getDistance(portOrders.get(tempIndex), storePort) < 3){
                                         try{
-                                            String resp = getSuccData.readUTF();
-                                            if(Boolean.parseBoolean(resp)){
-                                                Log.e("STORED",portOrders.get(index) + " " + count);
-                                                count++;
-                                                if(index == portOrders.size())
-                                                    index = 0;
+                                            Log.e("SENDING", distance + " " + portOrders.get(tempIndex));
+                                            socket = new Socket(InetAddress.getByAddress(new byte[]{10, 0, 2, 2}),
+                                                    Integer.parseInt(portOrders.get(tempIndex)));
+                                            socket.setSoTimeout(2000);
+                                            DataOutputStream sendSuccData = new DataOutputStream(socket.getOutputStream());
+                                            sendSuccData.writeUTF(receivedMessage);
+                                            sendData.flush();
+                                            DataInputStream recvSuccData = new DataInputStream(socket.getInputStream());
+                                            String recvMessage = recvSuccData.readUTF();
+                                            if(Boolean.parseBoolean(recvMessage)){
+                                                break;
                                             }
                                         }
-                                        catch (IOException exception){
-                                            Log.e("ERROR",exception.getMessage());
+                                        catch (EOFException exception){
+                                            Log.e("CRASHED", portOrders.get(tempIndex));
                                         }
-                                        index++;
-                                    }
+                                        tempIndex = (tempIndex + 1) % 5;
 
-                                }
-                            }
-                            sendData.writeUTF(String.valueOf(true));
-                        }
-                        else{
-                            Log.e("ACTUAL INSERT", msg.getJSON());
-                            sendData.writeUTF(String.valueOf(insert(msg)));
-                        }
-                    }
-                    else if(type.equals("QUERY")){
-                        if(!msg.getKey().equals("@") && !msg.getKey().equals("*")){
-                            int count = 0;
-                            int index = portOrders.indexOf(myPort);
-                            HashMap<String, Integer> resultsList = new HashMap<String, Integer>();
-                            HashMap<String, String> resultMap = new HashMap<String, String>();
-                            String val;
-                            String keyhash = "";
-                            try{
-                                keyhash = genHash(msg.getKey());
-                            } catch (NoSuchAlgorithmException e) {
-                                e.printStackTrace();
-                            }
-                            if(storePort.equals(myPort)){
-                                while (count != 3){
-                                    Log.e("QUERY SERVER", msg.getKey() + " " + index + " " + count);
-                                    if(portOrders.get(index).equals(myPort)){
-                                        resultMap = getMap(convertCursorToString(query(msg),resultMap));
-                                        Log.e("OWN", new JSONObject(resultMap).toString());
-                                        val = resultMap.get(msg.getKey());
-                                        if(val != null){
-                                            if(resultsList.get(val) == null){
-                                                resultsList.put(val,0);
-                                            }
-                                            resultsList.put(val, resultsList.get(val)+1);
-                                        }
-                                        count++;
-                                        index++;
-                                        if(index == portOrders.size())
-                                            index = 0;
                                     }
                                     else{
-                                        socket = new Socket(InetAddress.getByAddress(new byte[]{10, 0, 2, 2}),
-                                                Integer.parseInt(portOrders.get(index)));
-                                        OutputStream sendStream = socket.getOutputStream();
-                                        DataOutputStream sendSuccData = new DataOutputStream(sendStream);
-                                        sendSuccData.writeUTF(msg.getJSON());
-                                        DataInputStream getSuccData = new DataInputStream(socket.getInputStream());
-                                        try{
-                                            String resp = getSuccData.readUTF();
-                                            Log.e("OTHER", resp);
-                                            resultMap = getMap(resp);
-                                            val = resultMap.get(msg.getKey());
-                                            if(val != null){
-                                                if(resultsList.get(val) == null){
-                                                    resultsList.put(val,0);
-                                                }
-                                                resultsList.put(val, resultsList.get(val)+1);
-                                            }
+                                        break;
+                                    }
 
-                                        }
-                                        catch (IOException exception){
-                                            Log.e("ERROR",exception.getMessage());
-                                        }
-                                        count++;
-                                        index++;
-                                        if(index == portOrders.size())
-                                            index = 0;
-                                    }
                                 }
-                                Log.e("ARRAY", new JSONObject(resultsList).toString());
-                                int max = -1;
-                                String value = "";
-                                for(String key : resultsList.keySet()){
-                                    int temp = resultsList.get(key);
-                                    if(temp > max){
-                                        max = temp;
-                                        value = key;
-                                    }
-                                }
-                                HashMap<String, String > sendMap = new HashMap<String, String>();
-                                sendMap.put(msg.getKey(), value);
-                                sendData.writeUTF(new JSONObject(sendMap).toString());
 
                             }
-                            else{
-                                Cursor cursor = query(msg);
-                                Log.e("query size", cursor.getCount() + "");
-                                resultMap = new HashMap<String, String>();
-                                String resp = convertCursorToString(cursor, resultMap);
-                                sendData.writeUTF(resp);
+                        }
+                        sendData.writeUTF("true");
+                    }
+                    else if(type.contains("QUERY")){
+                        HashMap<String,String> resultMap = new HashMap<String, String>();
+                        if(!msg.getKey().equals("*") && !msg.getKey().equals("@")){
+                            if(distance < 3 && distance >= 0){
+                                sendData.writeUTF(convertCursorToString(query(msg),resultMap));
                             }
                         }
                         else{
-                            Cursor cursor = query(msg);
-                            HashMap<String, String> resultMap = new HashMap<String, String>();
-                            String resp = convertCursorToString(cursor, resultMap);
-                            sendData.writeUTF(resp);
+                            sendData.writeUTF(convertCursorToString(query(msg),resultMap));
                         }
-
+                        sendData.writeUTF("{}");
 
                     }
-                    else if(type.equals("DELETE")){
-                        int count = 0;
-                        int index = portOrders.indexOf(myPort);
-                        if(storePort.equals(myPort)){
-                            while (count != 3){
-                                if(portOrders.get(index).equals(myPort)){
-                                    delete(msg);
-                                    count++;
-                                    index++;
-                                    if(index == portOrders.size())
-                                        index = 0;
-                                }
-                                else{
-                                    socket = new Socket(InetAddress.getByAddress(new byte[]{10, 0, 2, 2}),
-                                            Integer.parseInt(portOrders.get(index)));
-                                    OutputStream sendStream = socket.getOutputStream();
-                                    DataOutputStream sendSuccData = new DataOutputStream(sendStream);
-                                    sendSuccData.writeUTF(msg.getJSON());
-                                    DataInputStream getSuccData = new DataInputStream(socket.getInputStream());
-                                    try{
-                                        String resp = getSuccData.readUTF();
-                                        if(Boolean.parseBoolean(resp)){
-                                            Log.e("DELETED",portOrders.get(index) + " " + count);
-                                            count++;
-                                            index++;
-                                            if(index == portOrders.size())
-                                                index = 0;
+                    else if(type.contains("DELETE")){
+                        if(!msg.getKey().equals("*") && !msg.getKey().equals("@")){
+                            if(distance < 3){
+                                addMessage(msg);
+                                delete(msg);
+                                int tempIndex = (index + 1) % 5;
+                                if(distance < 2){
+                                    while(true){
+                                        if(getDistance(portOrders.get(tempIndex), storePort) < 3){
+                                            try{
+                                                Log.e("SENDING", distance + " " + portOrders.get(tempIndex));
+                                                socket = new Socket(InetAddress.getByAddress(new byte[]{10, 0, 2, 2}),
+                                                        Integer.parseInt(portOrders.get(tempIndex)));
+                                                socket.setSoTimeout(2000);
+                                                DataOutputStream sendSuccData = new DataOutputStream(socket.getOutputStream());
+                                                sendSuccData.writeUTF(receivedMessage);
+                                                sendData.flush();
+                                                DataInputStream recvSuccData = new DataInputStream(socket.getInputStream());
+                                                String recvMessage = recvSuccData.readUTF();
+                                                if(Boolean.parseBoolean(recvMessage)){
+                                                    break;
+                                                }
+                                            }
+                                            catch (EOFException exception){
+                                                Log.e("CRASHED", portOrders.get(tempIndex));
+                                            }
+                                            tempIndex = (tempIndex + 1) % 5;
+
                                         }
+                                        else{
+                                            break;
+                                        }
+
                                     }
-                                    catch (IOException exception){
-                                        Log.e("ERROR",exception.getMessage());
-                                    }
+
                                 }
                             }
-                            sendData.writeUTF(String.valueOf(true));
                         }
                         else{
-                            Log.e("ACTUAL DELETE", msg.getJSON());
-                            sendData.writeUTF(String.valueOf(delete(msg)));
+                            addMessage(msg);
+                            delete(msg);
                         }
+
+                        sendData.writeUTF("true");
                     }
                     socket.close();
                 } catch (IOException e) {
                     e.printStackTrace();
                     break;
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
                 }
             }
             return null;
@@ -690,7 +701,7 @@ public class SimpleDynamoProvider extends ContentProvider {
     public int getDistance(String myPort, String storePort){
         int myIndex = portOrders.indexOf(myPort);
         int storePortIndex = portOrders.indexOf(storePort);
-        int distance = storePortIndex - myIndex;
+        int distance = myIndex - storePortIndex;
         if(distance < 0)
             distance += portOrders.size();
         return distance;
@@ -744,5 +755,41 @@ public class SimpleDynamoProvider extends ContentProvider {
         return map;
 
     }
+
+    public Void processMessages(String recievedMessages){
+        String[] messages = recievedMessages.split(",,,,");
+        if(recievedMessages == null || recievedMessages.equals(""))
+            return null;
+        for(String message : messages){
+            Log.e("RECOVERY", message);
+            Message msg = new Message(message);
+            String storePort = null;
+            try {
+                storePort = getStorePort(genHash(msg.getKey()));
+            } catch (NoSuchAlgorithmException e) {
+                e.printStackTrace();
+            }
+
+            if(storePort != null && getDistance(myPort,storePort) < 3){
+                if(msg.getMessageType().contains("STORE")){
+                    insert(msg);
+                }
+                if(msg.getMessageType().contains("DELETE")){
+                    delete(msg);
+                }
+            }
+        }
+        return null;
+    }
+
+    public synchronized String getMissedMessages(){
+        return TextUtils.join(",,,,",allMessages);
+    }
+
+    public synchronized Void addMessage(Message message){
+        allMessages.add(message.getMinJson());
+        return null;
+    }
+
 
 }

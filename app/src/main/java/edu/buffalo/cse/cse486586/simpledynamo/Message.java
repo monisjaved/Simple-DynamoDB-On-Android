@@ -31,13 +31,18 @@ public class Message {
         JSONObject json = null;
         try {
             json = new JSONObject(jsonString);
-            this.storePort = json.get("storePort").toString();
+            if(json.has("storePort"))
+                this.storePort = json.get("storePort").toString();
             this.value = json.get("value").toString();
             this.messageType = json.get("messageType").toString();
             this.key = json.get("key").toString();
-            this.senderPort = json.get("senderPort").toString();
+            if(json.has("senderPort"))
+                this.senderPort = json.get("senderPort").toString();
         } catch (JSONException e) {
-            e.printStackTrace();
+            String[] res = jsonString.split(",,");
+            this.key = res[0];
+            this.value = res[1];
+            this.messageType = res[2];
         }
 
     }
@@ -86,5 +91,15 @@ public class Message {
         jsonMap.put("senderPort", this.senderPort);
         JSONObject json = new JSONObject(jsonMap);
         return json.toString();
+    }
+
+    public String getMinJson(){
+        Map<String, String> jsonMap = new HashMap<String, String>();
+//        jsonMap.put("key", this.key);
+//        jsonMap.put("value",String.valueOf(this.value));
+//        jsonMap.put("messageType", String.valueOf(this.messageType));
+//        JSONObject json = new JSONObject(jsonMap);
+//        return json.toString();
+        return this.key + ",," + this.value + ",," + this.messageType;
     }
 }
