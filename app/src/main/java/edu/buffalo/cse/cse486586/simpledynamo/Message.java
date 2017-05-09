@@ -39,10 +39,17 @@ public class Message {
             if(json.has("senderPort"))
                 this.senderPort = json.get("senderPort").toString();
         } catch (JSONException e) {
-            String[] res = jsonString.split(",,");
+            String[] res = jsonString.split(",");
             this.key = res[0];
-            this.value = res[1];
-            this.messageType = res[2];
+            if(res.length > 1){
+                this.value = res[1];
+                this.messageType = res[2];
+            }
+            else{
+                this.value = "";
+                this.messageType = "DELETE";
+            }
+
         }
 
     }
@@ -100,6 +107,10 @@ public class Message {
 //        jsonMap.put("messageType", String.valueOf(this.messageType));
 //        JSONObject json = new JSONObject(jsonMap);
 //        return json.toString();
-        return this.key + ",," + this.value + ",," + this.messageType;
+        if(this.messageType.contains("STORE"))
+            return this.key + "," + this.value + "," + this.messageType;
+        if(this.messageType.contains("DELETE"))
+            return this.key;
+        return "";
     }
 }
