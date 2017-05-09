@@ -2,7 +2,7 @@ package edu.buffalo.cse.cse486586.simpledynamo;
 
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
-import java.io.EOFException;
+import java.io.IOException;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetAddress;
@@ -63,13 +63,7 @@ public class SimpleDynamoProvider extends ContentProvider {
 	public int delete(Uri uri, String selection, String[] selectionArgs) {
 		// TODO delete
         String keyHash = null;
-        while (isRecovering){
-            try {
-                Thread.sleep(50);
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            }
-        }
+        while (isRecovering){}
         if(selection.equals("*")){
             Message msg = new Message(myPort,selection,"");
             msg.setMessageType("DELETE");
@@ -154,13 +148,7 @@ public class SimpleDynamoProvider extends ContentProvider {
 	public Uri insert(Uri uri, ContentValues values) {
 		// TODO insert
         String keyHash = null;
-        while (isRecovering){
-            try {
-                Thread.sleep(50);
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            }
-        }
+        while (isRecovering){}
         Log.e("INSRT", "called");
         if (values.containsKey(KEY_FIELD) && values.containsKey(VALUE_FIELD)) {
             Log.e("INSERT", values.getAsString(KEY_FIELD) +  " " + values.getAsString(VALUE_FIELD));
@@ -247,13 +235,13 @@ public class SimpleDynamoProvider extends ContentProvider {
             Log.e(TAG, predPort + " " + myPort + " " + succPort);
             Log.e(TAG, serverPortHash);
 
-            new RecoveryTask().executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
-
             ServerSocket socket = new ServerSocket(SERVER_PORT);
 			socket.setReuseAddress(true);
-//            socket.setSoTimeout(2000);
+            isRecovering = true;
+//            socket.setSoTimeout(5000);
 
             new ServerTask().executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR, socket);
+            new RecoveryTask().executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
 		}catch (IOException e){
 			e.printStackTrace();
 		} catch (NoSuchAlgorithmException e) {
@@ -268,18 +256,12 @@ public class SimpleDynamoProvider extends ContentProvider {
 	public Cursor query(Uri uri, String[] projection, String selection,
 			String[] selectionArgs, String sortOrder) {
 		// TODO query
-        while (isRecovering){
-            try {
-                Thread.sleep(50);
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            }
-        }
+        while (isRecovering){}
         String[] columnNames = {KEY_FIELD, VALUE_FIELD};
         MatrixCursor matrixCursor = new MatrixCursor(columnNames);
         HashMap<String, String> msgMap = new HashMap<String, String>();
         String resp = null;
-        String delim = ",,,,,,";
+        String delim = ",,,";
         Log.e("QUERY", selection);
 
         Cursor cursor = null;
@@ -290,6 +272,8 @@ public class SimpleDynamoProvider extends ContentProvider {
             message.setMessageType("QUERY");
             message.setSenderPort(myPort);
             for(String port : portOrders){
+                if(port.equals(myPort))
+                    continue;
                 try {
                     if(resp == null){
                         resp = new ClientTask().execute(message.getJSON(), port).get();
@@ -304,13 +288,14 @@ public class SimpleDynamoProvider extends ContentProvider {
                     e.printStackTrace();
                 }
             }
+            selection = "@";
         }
-        else if(selection.equals("@")){
+        if(selection.equals("@")){
             Message message = new Message(myPort,selection,"");
             message.setMessageType("QUERY");
             message.setSenderPort(myPort);
             cursor = query(message);
-            Log.e("SIZE", "" + cursor.getCount());
+//            Log.e("SIZE", "" + cursor.getCount());
         }
         else{
             String keyHash = "";
@@ -318,19 +303,27 @@ public class SimpleDynamoProvider extends ContentProvider {
                 keyHash = genHash(selection);
                 String storePort = getStorePort(keyHash);
                 int storeIndex = (portOrders.indexOf(storePort) + 2) % 5;
-                resp = "crashed";
-                int count = 0;
-                while(resp.equals("crashed") && count < 3){
-                    Message message = new Message(storePort,selection,"");
+                if (storeIndex == portOrders.indexOf(myPort)){
+                    Message message = new Message(myPort,selection,"");
                     message.setMessageType("QUERY");
                     message.setSenderPort(myPort);
-                    Log.e("QUERYING", portOrders.get(storeIndex));
-                    resp = new ClientTask().execute(message.getJSON(), portOrders.get(storeIndex)).get();
-                    storeIndex--;
-                    if(storeIndex == -1){
-                        storeIndex = portOrders.size()-1;
+                    cursor = query(message);
+                }
+                else{
+                    resp = "crashed";
+                    int count = 0;
+                    while(resp.equals("crashed") && count < 3){
+                        Message message = new Message(storePort,selection,"");
+                        message.setMessageType("QUERY");
+                        message.setSenderPort(myPort);
+                        Log.e("QUERYING", portOrders.get(storeIndex));
+                        resp = new ClientTask().execute(message.getJSON(), portOrders.get(storeIndex)).get();
+                        storeIndex--;
+                        if(storeIndex == -1){
+                            storeIndex = portOrders.size()-1;
+                        }
+                        count++;
                     }
-                    count++;
                 }
             }
             catch (NoSuchAlgorithmException e){
@@ -370,7 +363,7 @@ public class SimpleDynamoProvider extends ContentProvider {
         if(resp != null && !resp.equals("")){
             String[] results = resp.split(delim);
             for(String result : results){
-                Log.e("ALL", result);
+//                Log.e("ALL", result);
                 HashMap<String, String> resultMap = getMap(result);
                 for(String key : resultMap.keySet()){
                     if(resultMap.get(key) != null){
@@ -392,7 +385,7 @@ public class SimpleDynamoProvider extends ContentProvider {
         Cursor cursor = null;
 
         String query = message.getKey();
-        Log.e("QUERY KEY", message.getKey());
+//        Log.e("QUERY KEY", message.getKey());
         Log.e("HELPER QUERY", message.getJSON());
         if(query.equals("*") || query.equals("@")){
             cursor = sqLiteDatabase.rawQuery("SELECT * FROM " + TABLE_NAME, null);
@@ -440,7 +433,7 @@ public class SimpleDynamoProvider extends ContentProvider {
 		return 0;
 	}
 
-    private String genHash(String input) throws NoSuchAlgorithmException {
+    private synchronized String genHash(String input) throws NoSuchAlgorithmException {
         MessageDigest sha1 = MessageDigest.getInstance("SHA-1");
         byte[] sha1Hash = sha1.digest(input.getBytes());
         Formatter formatter = new Formatter();
@@ -467,7 +460,7 @@ public class SimpleDynamoProvider extends ContentProvider {
             try {
                 socket = new Socket(InetAddress.getByAddress(new byte[]{10, 0, 2, 2}),
                         Integer.parseInt(predPort));
-                socket.setSoTimeout(2000);
+                socket.setSoTimeout(5000);
                 sendStream = socket.getOutputStream();
                 sendData = new DataOutputStream(sendStream);
                 sendData.writeUTF(message.getJSON());
@@ -482,7 +475,7 @@ public class SimpleDynamoProvider extends ContentProvider {
                 Log.e("RECOVERY", "done pred " + isRecovering);
                 socket = new Socket(InetAddress.getByAddress(new byte[]{10, 0, 2, 2}),
                         Integer.parseInt(succPort));
-                socket.setSoTimeout(2000);
+                socket.setSoTimeout(5000);
                 sendStream = socket.getOutputStream();
                 sendData = new DataOutputStream(sendStream);
                 sendData.writeUTF(message.getJSON());
@@ -513,7 +506,7 @@ public class SimpleDynamoProvider extends ContentProvider {
             try {
                 socket = new Socket(InetAddress.getByAddress(new byte[]{10, 0, 2, 2}),
                         Integer.parseInt(remotePort));
-                socket.setSoTimeout(2000);
+                socket.setSoTimeout(5000);
                 OutputStream sendStream = socket.getOutputStream();
                 DataOutputStream sendData = new DataOutputStream(sendStream);
                 sendData.writeUTF(message);
@@ -541,6 +534,8 @@ public class SimpleDynamoProvider extends ContentProvider {
             uriBuilder.scheme("content");
             Uri mUri = uriBuilder.build();
             Log.e("SOCKET","STARTED");
+
+            while (isRecovering){};
 
 
             while (true) {
@@ -570,7 +565,7 @@ public class SimpleDynamoProvider extends ContentProvider {
                         isRecovering = false;
                     }
 
-                    if(type.contains("STORE")){
+                    else if(type.contains("STORE")){
                         if(distance < 3){
                             addMessage(msg);
                             insert(msg);
@@ -582,7 +577,7 @@ public class SimpleDynamoProvider extends ContentProvider {
                                             Log.e("SENDING", distance + " " + portOrders.get(tempIndex));
                                             socket = new Socket(InetAddress.getByAddress(new byte[]{10, 0, 2, 2}),
                                                     Integer.parseInt(portOrders.get(tempIndex)));
-                                            socket.setSoTimeout(2000);
+                                            socket.setSoTimeout(5000);
                                             DataOutputStream sendSuccData = new DataOutputStream(socket.getOutputStream());
                                             sendSuccData.writeUTF(receivedMessage);
                                             sendData.flush();
@@ -592,7 +587,7 @@ public class SimpleDynamoProvider extends ContentProvider {
                                                 break;
                                             }
                                         }
-                                        catch (EOFException exception){
+                                        catch (IOException exception){
                                             Log.e("CRASHED", portOrders.get(tempIndex));
                                         }
                                         tempIndex = (tempIndex + 1) % 5;
@@ -634,7 +629,7 @@ public class SimpleDynamoProvider extends ContentProvider {
                                                 Log.e("SENDING", distance + " " + portOrders.get(tempIndex));
                                                 socket = new Socket(InetAddress.getByAddress(new byte[]{10, 0, 2, 2}),
                                                         Integer.parseInt(portOrders.get(tempIndex)));
-                                                socket.setSoTimeout(2000);
+                                                socket.setSoTimeout(5000);
                                                 DataOutputStream sendSuccData = new DataOutputStream(socket.getOutputStream());
                                                 sendSuccData.writeUTF(receivedMessage);
                                                 sendData.flush();
@@ -644,7 +639,7 @@ public class SimpleDynamoProvider extends ContentProvider {
                                                     break;
                                                 }
                                             }
-                                            catch (EOFException exception){
+                                            catch (IOException exception){
                                                 Log.e("CRASHED", portOrders.get(tempIndex));
                                             }
                                             tempIndex = (tempIndex + 1) % 5;
@@ -678,7 +673,7 @@ public class SimpleDynamoProvider extends ContentProvider {
         }
     }
 
-    public String getStorePort(String hash){
+    public synchronized String getStorePort(String hash){
         for(int i=0;i<hashOrders.size();i++){
             if(hash.compareTo(hashOrders.get(i)) <= 0)
                 return portOrders.get(i);
@@ -686,7 +681,7 @@ public class SimpleDynamoProvider extends ContentProvider {
         return portOrders.get(0);
     }
 
-    public List<String> getNeighbours(String portId){
+    public synchronized List<String> getNeighbours(String portId){
         int portIndex = portOrders.indexOf(portId);
         ArrayList<String> neighbours = new ArrayList<String>(2);
 
@@ -698,7 +693,7 @@ public class SimpleDynamoProvider extends ContentProvider {
         return neighbours;
     }
 
-    public int getDistance(String myPort, String storePort){
+    public synchronized int getDistance(String myPort, String storePort){
         int myIndex = portOrders.indexOf(myPort);
         int storePortIndex = portOrders.indexOf(storePort);
         int distance = myIndex - storePortIndex;
@@ -707,7 +702,7 @@ public class SimpleDynamoProvider extends ContentProvider {
         return distance;
     }
 
-    public String convertCursorToString(Cursor resultCursor, HashMap<String,String> resultMap){
+    public synchronized String convertCursorToString(Cursor resultCursor, HashMap<String,String> resultMap){
         //convert cursor object to json string to be sent on network
         if (resultCursor == null) {
             Log.e(TAG, "Result null");
@@ -734,7 +729,7 @@ public class SimpleDynamoProvider extends ContentProvider {
         return new JSONObject(resultMap).toString();
     }
 
-    public HashMap<String, String> getMap(String jsonString){
+    public synchronized HashMap<String, String> getMap(String jsonString){
         //convert hashmap to json string to be sent on network
         HashMap<String, String> map = new HashMap<String, String>();
         try{
@@ -756,12 +751,12 @@ public class SimpleDynamoProvider extends ContentProvider {
 
     }
 
-    public Void processMessages(String recievedMessages){
+    public synchronized Void processMessages(String recievedMessages){
         String[] messages = recievedMessages.split(",,,,");
         if(recievedMessages == null || recievedMessages.equals(""))
             return null;
         for(String message : messages){
-            Log.e("RECOVERY", message);
+//            Log.e("RECOVERY", message);
             Message msg = new Message(message);
             String storePort = null;
             try {
@@ -772,9 +767,11 @@ public class SimpleDynamoProvider extends ContentProvider {
 
             if(storePort != null && getDistance(myPort,storePort) < 3){
                 if(msg.getMessageType().contains("STORE")){
+                    allMessages.add(msg.getMinJson());
                     insert(msg);
                 }
                 if(msg.getMessageType().contains("DELETE")){
+                    allMessages.add(msg.getMinJson());
                     delete(msg);
                 }
             }
