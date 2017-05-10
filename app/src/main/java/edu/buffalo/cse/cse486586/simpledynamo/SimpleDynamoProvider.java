@@ -219,7 +219,7 @@ public class SimpleDynamoProvider extends ContentProvider {
     }
 
 	@Override
-	public boolean onCreate() {
+	public synchronized boolean onCreate() {
 		// TODO onCreate
 		dBHelper = new DBHelper(getContext());
         sqLiteDatabase = dBHelper.getWritableDatabase();
@@ -464,7 +464,7 @@ public class SimpleDynamoProvider extends ContentProvider {
             try {
                 socket = new Socket(InetAddress.getByAddress(new byte[]{10, 0, 2, 2}),
                         Integer.parseInt(predPort));
-//                socket.setSoTimeout(5000);
+                socket.setSoTimeout(6000);
                 sendStream = socket.getOutputStream();
                 sendData = new DataOutputStream(sendStream);
                 sendData.writeUTF(message.getJSON());
@@ -479,7 +479,7 @@ public class SimpleDynamoProvider extends ContentProvider {
                 //Log.e("RECOVERY", "done pred " + isRecovering);
                 socket = new Socket(InetAddress.getByAddress(new byte[]{10, 0, 2, 2}),
                         Integer.parseInt(succPort));
-//                socket.setSoTimeout(5000);
+                socket.setSoTimeout(6000);
                 sendStream = socket.getOutputStream();
                 sendData = new DataOutputStream(sendStream);
                 sendData.writeUTF(message.getJSON());
@@ -558,14 +558,12 @@ public class SimpleDynamoProvider extends ContentProvider {
                     int index = portOrders.indexOf(myPort);
                     //Log.e("SOCKET", msg.getJSON());
 
-                    while(isRecovering){
-                        Thread.sleep(50);
-                    }
+//                    while(isRecovering){
+//                        Thread.sleep(50);
+//                    }
 
                     if(type.equals("RECOVER")){
-                        isRecovering = true;
                         sendData.writeUTF(getMissedMessages(senderPort));
-                        isRecovering = false;
                     }
 
                     else if(type.contains("STORE")){
@@ -668,9 +666,10 @@ public class SimpleDynamoProvider extends ContentProvider {
                 } catch (IOException e) {
                     e.printStackTrace();
                     break;
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
                 }
+//                } catch (InterruptedException e) {
+//                    e.printStackTrace();
+//                }
             }
             return null;
         }
@@ -796,6 +795,7 @@ public class SimpleDynamoProvider extends ContentProvider {
     }
 
     public synchronized String getMissedMessages(String port){
+//        isRecovering = true;
         String result = "";
         if(port.equals(predPort)){
             result = allPredMessages.toString();
@@ -805,11 +805,12 @@ public class SimpleDynamoProvider extends ContentProvider {
             result = allSuccMessages.toString();
             allSuccMessages = new StringBuilder();
         }
+//        isRecovering = false;
         return result;
     }
 
     public synchronized Void addMessage(Message message){
-        allMessages.add(message.getMinJson());
+//        allMessages.add(message.getMinJson());
 //        allPredMessages.add(message.getMinJson());
 //        allSuccMessages.add(message.getMinJson());
         allPredMessages.append(message.getMinJson() + ":");
