@@ -1,9 +1,14 @@
 package edu.buffalo.cse.cse486586.simpledynamo;
 
+import java.io.BufferedOutputStream;
+import java.io.BufferedReader;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.net.InetAddress;
 import java.net.ServerSocket;
@@ -16,7 +21,10 @@ import java.util.Formatter;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
+import java.util.zip.GZIPInputStream;
+import java.util.zip.GZIPOutputStream;
 
 import android.content.ContentProvider;
 import android.content.ContentValues;
@@ -30,6 +38,7 @@ import android.net.Uri;
 import android.os.AsyncTask;
 import android.telephony.TelephonyManager;
 import android.text.TextUtils;
+import android.util.Base64;
 import android.util.Log;
 
 import org.json.JSONException;
@@ -60,14 +69,21 @@ public class SimpleDynamoProvider extends ContentProvider {
     private static StringBuilder allSuccMessages = new StringBuilder();
 	private DBHelper dBHelper;
     private static SQLiteDatabase sqLiteDatabase = null;
+    private static final ConcurrentHashMap<String,String> syncMap = new ConcurrentHashMap<String, String>(2);
     private static boolean isRecovering = false;
+    private static int index;
 
 
 	@Override
 	public int delete(Uri uri, String selection, String[] selectionArgs) {
 		// TODO delete
         String keyHash = null;
-        while (isRecovering){}
+//        while (isRecovering){}
+        try{
+            Thread.sleep(30*index);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
         if(selection.equals("*")){
             Message msg = new Message(myPort,selection,"");
             msg.setMessageType("DELETE");
@@ -152,7 +168,12 @@ public class SimpleDynamoProvider extends ContentProvider {
 	public Uri insert(Uri uri, ContentValues values) {
 		// TODO insert
         String keyHash = null;
-        while (isRecovering){}
+//        while (isRecovering){}
+        try{
+            Thread.sleep(30*index);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
 //        //Log.e("INSRT", "called");
         if (values.containsKey(KEY_FIELD) && values.containsKey(VALUE_FIELD)) {
             //Log.e("INSERT", values.getAsString(KEY_FIELD) +  " " + values.getAsString(VALUE_FIELD));
@@ -229,6 +250,7 @@ public class SimpleDynamoProvider extends ContentProvider {
 		String portStr = tel.getLine1Number().substring(tel.getLine1Number().length() - 4);
 		myPort = String.valueOf((Integer.parseInt(portStr) * 2));
 		String resp = null;
+        index = portOrders.indexOf(myPort) + 1;
 
 
 		try{
@@ -243,8 +265,12 @@ public class SimpleDynamoProvider extends ContentProvider {
 			socket.setReuseAddress(true);
             isRecovering = true;
 //            socket.setSoTimeout(5000);
-            new RecoveryTask().executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
+//            new RecoveryTask().executeOnExecutor(AsyncTask.SERIAL_EXECUTOR);
             new ServerTask().executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR, socket);
+            new RecoverTask().executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR, succPort);
+            new RecoverTask().executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR, predPort);
+            new ProcessTask().executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
+//            isRecovering = false;
 
 		}catch (IOException e){
 			e.printStackTrace();
@@ -260,7 +286,12 @@ public class SimpleDynamoProvider extends ContentProvider {
 	public Cursor query(Uri uri, String[] projection, String selection,
 			String[] selectionArgs, String sortOrder) {
 		// TODO query
-        while (isRecovering){}
+//        while (isRecovering){}
+        try{
+            Thread.sleep(30*index);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
         String[] columnNames = {KEY_FIELD, VALUE_FIELD};
         MatrixCursor matrixCursor = new MatrixCursor(columnNames);
         HashMap<String, String> msgMap = new HashMap<String, String>();
@@ -458,19 +489,22 @@ public class SimpleDynamoProvider extends ContentProvider {
             Message message = new Message(myPort,"","");
             message.setSenderPort(myPort);
             message.setMessageType("RECOVER");
+            String tempMessage = "";
             OutputStream sendStream;
             DataOutputStream sendData;
             DataInputStream recvData;
             try {
                 socket = new Socket(InetAddress.getByAddress(new byte[]{10, 0, 2, 2}),
                         Integer.parseInt(predPort));
-                socket.setSoTimeout(6000);
+                socket.setSoTimeout(5000);
                 sendStream = socket.getOutputStream();
                 sendData = new DataOutputStream(sendStream);
                 sendData.writeUTF(message.getJSON());
                 sendData.flush();
                 recvData = new DataInputStream(socket.getInputStream());
                 receivedMessage = recvData.readUTF();
+                recvData.close();
+                receivedMessage = uncompressString(receivedMessage);
 //                processMessages(receivedMessage);
             } catch (IOException e) {
                 e.printStackTrace();
@@ -479,19 +513,74 @@ public class SimpleDynamoProvider extends ContentProvider {
                 //Log.e("RECOVERY", "done pred " + isRecovering);
                 socket = new Socket(InetAddress.getByAddress(new byte[]{10, 0, 2, 2}),
                         Integer.parseInt(succPort));
-                socket.setSoTimeout(6000);
+                socket.setSoTimeout(5000);
                 sendStream = socket.getOutputStream();
                 sendData = new DataOutputStream(sendStream);
                 sendData.writeUTF(message.getJSON());
                 sendData.flush();
                 recvData = new DataInputStream(socket.getInputStream());
-                receivedMessage = receivedMessage + recvData.readUTF();
+                tempMessage = recvData.readUTF();
+                recvData.close();
+                receivedMessage += uncompressString(tempMessage);
             } catch (IOException e) {
                 e.printStackTrace();
             }
             //Log.e("RECOVERY", "done succ " + isRecovering + receivedMessage);
             processMessages(receivedMessage);
             //Log.e("RECOVERY","exiting " + isRecovering);
+            return null;
+        }
+
+    }
+
+    private class RecoverTask extends AsyncTask<String, Void, Void> {
+        @Override
+        // TODO recoveryTask
+        protected Void doInBackground(String... messages) {
+            String port = messages[0];
+            Log.e("RECOVERY","entered for " + port);
+            Socket socket = null;
+            String receivedMessage = "";
+            Message message = new Message(myPort,"","");
+            message.setSenderPort(myPort);
+            message.setMessageType("RECOVER");
+            OutputStream sendStream;
+            DataOutputStream sendData;
+            DataInputStream recvData;
+            try {
+                socket = new Socket(InetAddress.getByAddress(new byte[]{10, 0, 2, 2}),
+                        Integer.parseInt(port));
+//                socket.setSoTimeout(5000);
+                sendStream = socket.getOutputStream();
+                sendData = new DataOutputStream(sendStream);
+                sendData.writeUTF(message.getJSON());
+                sendData.flush();
+                recvData = new DataInputStream(socket.getInputStream());
+                receivedMessage = recvData.readUTF();
+                recvData.close();
+                receivedMessage = uncompressString(receivedMessage);
+            } catch (IOException e) {
+                Log.e("crashed", port);
+                e.printStackTrace();
+                receivedMessage = "";
+            }
+            syncMap.put(port, receivedMessage);
+            Log.e("RECOVERY","exiting for port " + port);
+            return null;
+        }
+    }
+
+    private class ProcessTask extends AsyncTask<Void, Void, Void> {
+        @Override
+        // TODO recoveryTask
+        protected Void doInBackground(Void... voids) {
+            Log.e("PROCESS","entered " + isRecovering);
+            while(syncMap.size() != 2) {}
+
+            String receivedMessage = syncMap.get(succPort) + syncMap.get(predPort);
+            processMessages(receivedMessage);
+            Log.e("PROCESS", "exiting " + isRecovering);
+
             return null;
         }
 
@@ -536,10 +625,11 @@ public class SimpleDynamoProvider extends ContentProvider {
             uriBuilder.authority("edu.buffalo.cse.cse486586.simpledynamo.provider");
             uriBuilder.scheme("content");
             Uri mUri = uriBuilder.build();
-            //Log.e("SOCKET","STARTED");
+            Log.e("Server","STARTED");
 
             while (isRecovering){};
 
+            Log.e("Server", "CONTINUING");
 
             while (true) {
 
@@ -563,7 +653,15 @@ public class SimpleDynamoProvider extends ContentProvider {
 //                    }
 
                     if(type.equals("RECOVER")){
-                        sendData.writeUTF(getMissedMessages(senderPort));
+                        OutputStream os = socket.getOutputStream();
+                        DataOutputStream dos = new DataOutputStream(new BufferedOutputStream(os));
+                        String send = getMissedMessages(senderPort);
+                        dos.writeUTF(compressString(send));
+                        dos.flush();
+//                        Log.e("String size", send.length() + " " +
+//                                compressString(send).length() + " " +
+//                                uncompressString(compressString(send)).equals(send));
+
                     }
 
                     else if(type.contains("STORE")){
@@ -754,6 +852,7 @@ public class SimpleDynamoProvider extends ContentProvider {
     }
 
     public synchronized Void processMessages(String recievedMessages){
+//        Log.e("processMessages", "'" + recievedMessages + "'");
         if(recievedMessages.equals("crashed")){
             isRecovering = false;
             return null;
@@ -799,11 +898,11 @@ public class SimpleDynamoProvider extends ContentProvider {
         String result = "";
         if(port.equals(predPort)){
             result = allPredMessages.toString();
-            allPredMessages = new StringBuilder();
+//            allPredMessages = new StringBuilder();
         }
         if(port.equals(succPort)){
             result = allSuccMessages.toString();
-            allSuccMessages = new StringBuilder();
+//            allSuccMessages = new StringBuilder();
         }
 //        isRecovering = false;
         return result;
@@ -817,6 +916,41 @@ public class SimpleDynamoProvider extends ContentProvider {
         allSuccMessages.append(message.getMinJson() + ":");
         return null;
     }
+
+    public synchronized static String compressString(String srcTxt)
+            throws IOException {
+        ByteArrayOutputStream rstBao = new ByteArrayOutputStream();
+        GZIPOutputStream zos = new GZIPOutputStream(rstBao);
+        zos.write(srcTxt.getBytes());
+        zos.close();
+
+        byte[] bytes = rstBao.toByteArray();
+        return Base64.encodeToString(bytes, Base64.DEFAULT);
+    }
+
+    public synchronized static String uncompressString(String zippedBase64Str)
+            throws IOException {
+        StringBuilder buffer = new StringBuilder();
+
+        byte[] bytes = Base64.decode(zippedBase64Str, Base64.DEFAULT);
+
+        GZIPInputStream zi = null;
+        try {
+            zi = new GZIPInputStream(new ByteArrayInputStream(bytes));
+
+            InputStreamReader reader = new InputStreamReader(zi);
+            BufferedReader in = new BufferedReader(reader);
+
+            String readed;
+            while ((readed = in.readLine()) != null) {
+                buffer.append(readed);
+            }
+        } finally {
+            zi.close();
+        }
+        return buffer.toString();
+    }
+
 
 
 }
